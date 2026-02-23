@@ -1,0 +1,23 @@
+{
+  "name": "traffic_monitor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "open": "^11.0.0",
+    "socket.io": "^4.8.3",
+    "systeminformation": "^5.31.1"
+  },
+  "devDependencies": {
+    "electron": "^40.6.0"
+  }
+}
