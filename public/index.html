@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitor (GlassWire Style)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --card-bg: #252538;
+            --text-color: #cdd6f4;
+            --accent-color: #89b4fa;
+            --alert-color: #f38ba8;
+            --success-color: #a6e3a1;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        h1, h2 { margin: 0; padding-bottom: 10px; border-bottom: 1px solid #444; }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #444;
+        }
+        th { color: var(--accent-color); }
+        .alert-log {
+            max-height: 300px;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+        }
+        .alert-item {
+            padding: 10px;
+            border-left: 4px solid var(--alert-color);
+            background: rgba(243, 139, 168, 0.1);
+            margin-bottom: 5px;
+            font-size: 0.85em;
+        }
+        .stat-box {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 10px;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Network Monitor</h1>
+    </header>
+
+    <div class="stat-box card">
+        <div>Download: <span id="downloadSpeed" class="stat-value">0 KB/s</span></div>
+        <div>Upload: <span id="uploadSpeed" class="stat-value">0 KB/s</span></div>
+    </div>
+
+    <div class="dashboard">
+        <div class="card">
+            <h2>Traffic History</h2>
+            <div class="chart-container">
+                <canvas id="trafficChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Alerts</h2>
+            <ul id="alertLog" class="alert-log">
+                <!-- Alerts will be inserted here -->
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Active Applications</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>App Name</th>
+                    <th>PID</th>
+                    <th>Remote Host (IP:Port)</th>
+                    <th>Location</th>
+                    <th>State</th>
+                </tr>
+            </thead>
+            <tbody id="connectionsTable">
+                <!-- Connections will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const socket = io();
+        const maxDataPoints = 60; // 1 minute of history
+        
+        // Chart Setup
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        const trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(maxDataPoints).fill(''),
+                datasets: [{
+                    label: 'Download (KB/s)',
+                    borderColor: '#a6e3a1',
+                    backgroundColor: 'rgba(166, 227, 161, 0.1)',
+                    data: Array(maxDataPoints).fill(0),
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Upload (KB/s)',
+                    borderColor: '#f9e2af',
+                    backgroundColor: 'rgba(249, 226, 175, 0.1)',
+                    data: Array(maxDataPoints).fill(0),
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { beginAtZero: true, grid: { color: '#444' } }
+                },
+                plugins: { legend: { labels: { color: '#cdd6f4' } } }
+            }
+        });
+
+        const ipCache = new Map();
+
+        // Fetch GeoIP info
+        async function getGeoInfo(ip) {
+            if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) return 'Local Network';
+            if (ipCache.has(ip)) return ipCache.get(ip);
+            
+            try {
+                const res = await fetch(`http://ip-api.com/json/${ip}`);
+                const data = await res.json();
+                const location = data.country || 'Unknown';
+                ipCache.set(ip, location);
+                return location;
+            } catch (e) {
+                return 'Unknown';
+            }
+        }
+
+        // Socket Events
+        socket.on('update', async (data) => {
+            // Update Speeds
+            document.getElementById('downloadSpeed').textContent = (data.rx_sec / 1024).toFixed(1) + ' KB/s';
+            document.getElementById('uploadSpeed').textContent = (data.tx_sec / 1024).toFixed(1) + ' KB/s';
+
+            // Update Chart
+            trafficChart.data.datasets[0].data.push(data.rx_sec / 1024);
+            trafficChart.data.datasets[1].data.push(data.tx_sec / 1024);
+            if (trafficChart.data.datasets[0].data.length > maxDataPoints) {
+                trafficChart.data.datasets[0].data.shift();
+                trafficChart.data.datasets[1].data.shift();
+            }
+            trafficChart.update();
+
+            // Update Connections Table
+            const tbody = document.getElementById('connectionsTable');
+            tbody.innerHTML = '';
+            
+            // Process connections (limit to top 20 for performance)
+            const uniqueConns = data.connections.slice(0, 20); 
+            
+            for (const conn of uniqueConns) {
+                const row = document.createElement('tr');
+                const loc = await getGeoInfo(conn.peerAddress);
+                
+                row.innerHTML = `
+                    <td>${conn.processName || 'Unknown'}</td>
+                    <td>${conn.pid}</td>
+                    <td>${conn.peerAddress}:${conn.peerPort}</td>
+                    <td>${loc}</td>
+                    <td>${conn.state}</td>
+                `;
+                tbody.appendChild(row);
+            }
+        });
+
+        socket.on('alert', (alertData) => {
+            const ul = document.getElementById('alertLog');
+            const li = document.createElement('li');
+            li.className = 'alert-item';
+            li.innerHTML = `<strong>${alertData.type}</strong>: ${alertData.message} <br><small>${new Date().toLocaleTimeString()}</small>`;
+            ul.prepend(li); // Add to top
+        });
+    </script>
+</body>
+</html>
