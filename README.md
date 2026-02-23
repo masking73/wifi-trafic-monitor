@@ -52,3 +52,29 @@ npm start
 ## 🛡 ライセンス
 
 ISC License
+
+## Agent powering down. Goodbye!                                                                                                       │
+│                                                                                                                                      │
+│  Interaction Summary                                                                                                                 │
+│  Session ID:                 e7e0c75a-e2d0-4343-9d68-ea69f6196bbd                                                                    │
+│  Tool Calls:                 17 ( ✓ 17 x 0 )                                                                                         │
+│  Success Rate:               100.0%                                                                                                  │
+│  User Agreement:             100.0% (11 reviewed)                                                                                    │
+│  Code Changes:               +574 -13                                                                                                │
+│                                                                                                                                      │
+│  Performance                                                                                                                         │
+│  Wall Time:                  1h 10s                                                                                                  │
+│  Agent Active:               19m 25s                                                                                                 │
+│    » API Time:               15m 45s (81.2%)                                                                                         │
+│    » Tool Time:              3m 39s (18.8%)                                                                                          │
+│                                                                                                                                      │
+│                                                                                                                                      │
+│  Model Usage                                                                                                                         │
+│  Model                       Reqs   Input Tokens   Cache Reads  Output Tokens                                                        │
+│  ────────────────────────────────────────────────────────────────────────────                                                        │
+│  gemini-2.5-flash-lite          1            846             0             85                                                        │
+│  gemini-3-pro-preview          15         16,964        18,044          3,401                                                        │
+│  gemini-2.5-flash               5          3,511             0             98                                                        │
+│  gemini-3-flash-preview        15        110,909       182,564          5,105                                                        │
+│                                                                                                                                      │
+│  Savings Highlight: 200,608 (60.3%) of input tokens were served from the cache, reducing costs.   
